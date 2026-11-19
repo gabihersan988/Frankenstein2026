@@ -1,0 +1,74 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: frankenstein-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-frankenstein123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-frankenstein}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -P 3306 --protocol=TCP -u root -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - frankenstein_net
+
+  back:
+    build:
+      context: ../back
+      dockerfile: Dockerfile
+    container_name: frankenstein-back
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACK_PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      MYSQL_HOST: db
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-frankenstein123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-frankenstein}
+      SECRET: ${SECRET:-frankenstein_super_secret_jwt_key_2024}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_PASS: ${SMTP_PASS:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@frankenstein.com}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASS: ${ADMIN_PASS:-admin1234}
+      PORTFRONT: ${PORTFRONT:-http://localhost:5173}
+    volumes:
+      - back_uploads:/app/uploads
+    networks:
+      - frankenstein_net
+
+  front:
+    build:
+      context: ../front
+      dockerfile: Dockerfile
+      args:
+        VITE_BASE_URL: ${VITE_BASE_URL:-/api}
+    container_name: frankenstein-front
+    restart: unless-stopped
+    depends_on:
+      - back
+    ports:
+      - "${FRONT_PORT:-5173}:80"
+    networks:
+      - frankenstein_net
+
+volumes:
+  mysql_data:
+  back_uploads:
+
+networks:
+  frankenstein_net:
+    driver: bridge
